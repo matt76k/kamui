@@ -12,32 +12,28 @@ class AluTest extends AnyFreeSpec {
       dut.io.req.bits.data2.poke(20.S)
       dut.io.req.bits.op.poke(AluOp.ADD)
       dut.io.resp.ready.poke(true.B)
-
-      dut.clock.step()
       
       dut.io.resp.valid.expect(true.B)
       dut.io.resp.bits.result.expect(30.S)
 
-      dut.io.req.valid.poke(false.B)
-      dut.clock.step()
+      dut.clock.step(1)
 
-      // テストケース2: 正の数同士の掛け算
       dut.io.req.valid.poke(true.B)
       dut.io.req.bits.data1.poke(6.S)
       dut.io.req.bits.data2.poke(7.S)
       dut.io.req.bits.op.poke(AluOp.MUL)
       dut.io.resp.ready.poke(true.B)
 
-      dut.clock.step()
+      dut.clock.step(1)
       dut.io.resp.valid.expect(false.B)
       
-      dut.clock.step()
+      dut.clock.step(1)
       dut.io.resp.valid.expect(false.B)
       
-      dut.clock.step()
+      dut.clock.step(1)
       dut.io.resp.valid.expect(false.B)
       
-      dut.clock.step()
+      dut.clock.step(1)
       dut.io.resp.valid.expect(true.B)
       dut.io.resp.bits.result.expect(42.S)        
 

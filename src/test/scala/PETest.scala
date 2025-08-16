@@ -30,7 +30,7 @@ class PETest extends AnyFreeSpec {
     readAddr1: Int = 0,
     readAddr2: Int = 0,
     immediate: Int = 0,
-    outputSel: UInt = "b0010".U(4.W),
+    outputSel: UInt = OutputDirection.SOUTH,
     writeEnable: Boolean = false
   ): Unit = {
       pe.io.config.operation.poke(operation)
@@ -44,7 +44,7 @@ class PETest extends AnyFreeSpec {
       pe.io.config.rfWriteEn.poke(writeEnable.B)
   }
 
-  "PE operation test" in {
+  "op test" in {
     simulate(new PE(32)) { dut =>
       
       initializePorts(dut)
@@ -58,20 +58,19 @@ class PETest extends AnyFreeSpec {
         readAddr1 = 0,  // not used in this operation
         readAddr2 = 0,  // not used in this operation
         immediate = 1,
+        writeEnable = true
       )
 
       dut.io.dataInNorth.valid.poke(true.B)
       dut.io.dataInNorth.bits.poke(5.S)
 
       dut.clock.step(1)
+      initializePorts(dut)
 
-      // 出力の確認
       dut.io.dataOutSouth.valid.expect(true.B)
       dut.io.dataOutSouth.bits.expect(6.S)
 
-      initializePorts(dut)
-
-      dut.clock.step(1)
+      // レジスタファイルを使う
 
       configureOperation(dut,
         operation = AluOp.ADD,
@@ -81,13 +80,40 @@ class PETest extends AnyFreeSpec {
         readAddr1 = 0,  // register file 0 (accumulator)
         readAddr2 = 0,  // not used in this operation
         immediate = 1,
+        writeEnable = true
       )
 
       dut.clock.step(1)
+      initializePorts(dut)
 
       dut.io.dataOutSouth.valid.expect(true.B)
       dut.io.dataOutSouth.bits.expect(7.S)
 
+      // 掛け算
+
+      configureOperation(dut,
+        operation = AluOp.MUL,
+        input1Sel = 4,  // register file
+        input2Sel = 6,  // immediate
+        writeAddr = 0,  // write to register file address 0
+        readAddr1 = 0,  // not used in this operation
+        readAddr2 = 0,  // not used in this operation
+        immediate = 6,
+      )
+
+      for (i <- 1 to 4) {
+        dut.clock.step(1)
+        initializePorts(dut)
+        dut.io.dataOutSouth.valid.expect(false.B)
+      }
+    
+      dut.clock.step(1)
+      dut.io.dataOutSouth.valid.expect(true.B)
+      dut.io.dataOutSouth.bits.expect(42.S)
+
+      dut.clock.step(1)
+      dut.io.dataOutSouth.valid.expect(false.B)
+      dut.io.dataOutSouth.bits.expect(42.S)
     }
   }
 }
