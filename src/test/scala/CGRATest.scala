@@ -178,6 +178,31 @@ class CGRATest extends AnyFreeSpec with CGRATestUtils {
     }
   }
 
+  "mul" in {
+    simulate(new CGRA2x2()) { dut =>
+      reset(dut)
+      initializePorts(dut)
+
+      configurePE(dut.io.config.pe00,
+        operation = AluOp.MUL,
+        input1Sel = InputDirection.NORTH,
+        input2Sel = InputDirection.WEST,
+        outputSel = OutputDirection.NORTH
+      )
+
+      dut.io.dataInNorth00.valid.poke(true.B)
+      dut.io.dataInNorth00.bits.poke(5.S)
+      dut.io.dataInWest00.valid.poke(true.B)
+      dut.io.dataInWest00.bits.poke(3.S)
+
+      dut.clock.step(5)
+
+      dut.io.dataOutNorth00.valid.expect(true.B)
+      dut.io.dataOutNorth00.bits.expect(15.S)
+    }
+  }
+
+
   "two PE pipeline test" in {
     simulate(new CGRA2x2()) { dut =>
       reset(dut)
@@ -252,7 +277,7 @@ class CGRATest extends AnyFreeSpec with CGRATestUtils {
       dut.io.dataInEast01.valid.poke(true.B)
       dut.io.dataInEast01.bits.poke(6.S)    // B[1]
 
-      dut.clock.step(6)
+      dut.clock.step(5)
 
       configurePE(dut.io.config.pe10,
         operation = AluOp.ADD,
@@ -273,6 +298,8 @@ class CGRATest extends AnyFreeSpec with CGRATestUtils {
         writeAddr = 0,
         immediate = 0
       )
+
+      dut.clock.step(1)
 
       dut.io.dataInNorth00.valid.poke(true.B)
       dut.io.dataInNorth00.bits.poke(3.S)   // A[2]
@@ -362,6 +389,107 @@ class CGRATest extends AnyFreeSpec with CGRATestUtils {
         readAddr1 = 0,
         immediate = 0,
       )
+      disablePE(dut.io.config.pe11)
+
+      dut.clock.step(1)
+
+      configurePE(dut.io.config.pe11,
+        operation = AluOp.ADD,
+        input1Sel = InputDirection.WEST,
+        input2Sel = InputDirection.RF1,
+        outputSel = OutputDirection.SOUTH,
+        readAddr1 = 0,
+      )
+
+      dut.clock.step(1)
+
+      dut.io.dataOutSouth11.valid.expect(true.B)
+      dut.io.dataOutSouth11.bits.expect(70.S)
+
+    }
+  }
+
+  "dot product2" in {
+    simulate(new CGRA2x2()) { dut =>
+      reset(dut)
+      initializePorts(dut)
+
+      // ベクトルA = [1, 2, 3, 4]
+      // ベクトルB = [5, 6, 7, 8]
+      // 内積 = 1*5 + 2*6 + 3*7 + 4*8 = 70
+
+      configurePE(dut.io.config.pe00,
+        operation = AluOp.MUL,
+        input1Sel = InputDirection.NORTH,
+        input2Sel = InputDirection.WEST,
+        outputSel = OutputDirection.SOUTH,
+      )
+
+      configurePE(dut.io.config.pe01,
+        operation = AluOp.MUL,
+        input1Sel = InputDirection.NORTH,
+        input2Sel = InputDirection.EAST,
+        outputSel = OutputDirection.SOUTH,
+      )
+
+      configurePE(dut.io.config.pe10,
+        operation = AluOp.MUL,
+        input1Sel = InputDirection.WEST,
+        input2Sel = InputDirection.SOUTH,
+        writeAddr = 0,
+        writeEnable = true,
+      )
+
+      configurePE(dut.io.config.pe11,
+        operation = AluOp.MUL,
+        input1Sel = InputDirection.SOUTH,
+        input2Sel = InputDirection.EAST,
+        writeAddr = 0,
+        writeEnable = true,
+      )
+
+      dut.io.dataInNorth00.valid.poke(true.B)
+      dut.io.dataInNorth00.bits.poke(1.S)   // A[0]
+      dut.io.dataInWest00.valid.poke(true.B)
+      dut.io.dataInWest00.bits.poke(5.S)    // B[0]
+
+      dut.io.dataInNorth01.valid.poke(true.B)
+      dut.io.dataInNorth01.bits.poke(2.S)   // A[1]
+      dut.io.dataInEast01.valid.poke(true.B)
+      dut.io.dataInEast01.bits.poke(6.S)    // B[1]
+
+      dut.io.dataInSouth10.valid.poke(true.B)
+      dut.io.dataInSouth10.bits.poke(3.S)   // A[2]
+      dut.io.dataInWest10.valid.poke(true.B)
+      dut.io.dataInWest10.bits.poke(7.S)    // B[2]
+
+      dut.io.dataInSouth11.valid.poke(true.B)
+      dut.io.dataInSouth11.bits.poke(4.S)   // A[3]
+      dut.io.dataInEast11.valid.poke(true.B)
+      dut.io.dataInEast11.bits.poke(8.S)    // B[3]
+
+      dut.clock.step(5)
+
+      configurePE(dut.io.config.pe10,
+        operation = AluOp.ADD,
+        input1Sel = InputDirection.RF1,
+        input2Sel = InputDirection.NORTH,
+        outputSel = OutputDirection.EAST,
+        readAddr1 = 0,
+      )
+
+      configurePE(dut.io.config.pe11,
+        operation = AluOp.ADD,
+        input1Sel = InputDirection.RF1,
+        input2Sel = InputDirection.NORTH,
+        outputSel = OutputDirection.SOUTH,
+        readAddr1 = 0,
+        writeAddr = 0,
+        writeEnable = true,
+      )
+
+      dut.clock.step(1)  // 設定反映 + 計算開始
+      dut.clock.step(1)  // 計算完了 + PE10→PE11へのデータ転送準備
 
       configurePE(dut.io.config.pe11,
         operation = AluOp.ADD,
@@ -375,7 +503,7 @@ class CGRATest extends AnyFreeSpec with CGRATestUtils {
 
       dut.io.dataOutSouth11.valid.expect(true.B)
       dut.io.dataOutSouth11.bits.expect(70.S)
-
     }
   }
+
 }
