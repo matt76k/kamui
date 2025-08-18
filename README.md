@@ -11,3 +11,8 @@ Alternatively, if you use Mill:
 ```sh
 ./mill kamui.runMain AluDriver
 ```
+
+```sh
+./mill kamui.test.testOnly CGRATest
+./mill kamui.test.testOnly CGRATest -- -z "two PE pipeline test"
+```

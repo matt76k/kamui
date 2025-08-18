@@ -2,12 +2,32 @@ import chisel3._
 import circt.stage.ChiselStage
 import chisel3.util._
 
-// 出力方向の定数を定義
 object OutputDirection {
   val NORTH = 1.U(4.W)   // 0001
   val SOUTH = 2.U(4.W)   // 0010
   val EAST  = 4.U(4.W)   // 0100
   val WEST  = 8.U(4.W)   // 1000
+
+  object Mask {
+    val NORTH = 1
+    val SOUTH = 2
+    val EAST = 4
+    val WEST = 8
+  }
+  
+  def apply(mask: Int): UInt = mask.U(4.W)
+
+}
+
+object InputDirection {
+  val NORTH = 0
+  val SOUTH = 1
+  val EAST  = 2
+  val WEST  = 3
+  val RF1   = 4
+  val RF2   = 5
+  val IMMEDIATE = 6
+  val OUTPUT   = 7
 }
 
 class PEConfig extends Bundle {
@@ -35,8 +55,6 @@ class PE(dataWidth: Int = 32) extends Module {
     val dataOutWest  = Decoupled(SInt(dataWidth.W))
     
     val config = Input(new PEConfig)
-    
-    val busy = Output(Bool())
   })
   
   val registerFile = RegInit(VecInit(Seq.fill(4)(0.S(dataWidth.W))))
@@ -74,11 +92,14 @@ class PE(dataWidth: Int = 32) extends Module {
   val eastSelected = (io.config.outputSel & OutputDirection.EAST) =/= 0.U
   val westSelected = (io.config.outputSel & OutputDirection.WEST) =/= 0.U
   
-  val selectedOutputsReady = 
+  val hasSelectedOutput = northSelected || southSelected || eastSelected || westSelected
+  val selectedOutputsReady = Mux(hasSelectedOutput,
     (!northSelected || io.dataOutNorth.ready) &&
     (!southSelected || io.dataOutSouth.ready) &&
     (!eastSelected || io.dataOutEast.ready) &&
-    (!westSelected || io.dataOutWest.ready)
+    (!westSelected || io.dataOutWest.ready),
+    true.B
+  )
 
   alu.io.req.valid := selectedInput1Valid && selectedInput2Valid
   alu.io.req.bits.data1 := inputSources(io.config.input1Sel)
@@ -87,10 +108,16 @@ class PE(dataWidth: Int = 32) extends Module {
   alu.io.resp.ready := selectedOutputsReady
   
   val inputReady = selectedOutputsReady && alu.io.req.ready
-  io.dataInNorth.ready := inputReady
-  io.dataInSouth.ready := inputReady
-  io.dataInEast.ready := inputReady
-  io.dataInWest.ready := inputReady
+  
+  val northInputSelected = (io.config.input1Sel === InputDirection.NORTH.U) || (io.config.input2Sel === InputDirection.NORTH.U)
+  val southInputSelected = (io.config.input1Sel === InputDirection.SOUTH.U) || (io.config.input2Sel === InputDirection.SOUTH.U)
+  val eastInputSelected = (io.config.input1Sel === InputDirection.EAST.U) || (io.config.input2Sel === InputDirection.EAST.U)
+  val westInputSelected = (io.config.input1Sel === InputDirection.WEST.U) || (io.config.input2Sel === InputDirection.WEST.U)
+
+  io.dataInNorth.ready := northInputSelected && inputReady
+  io.dataInSouth.ready := southInputSelected && inputReady
+  io.dataInEast.ready := eastInputSelected && inputReady
+  io.dataInWest.ready := westInputSelected && inputReady
 
   when(alu.io.resp.valid && alu.io.resp.ready) {
     outputReg := alu.io.resp.bits.result
@@ -114,7 +141,6 @@ class PE(dataWidth: Int = 32) extends Module {
   io.dataOutWest.valid := outputValid && westSelected
   io.dataOutWest.bits := outputReg
 
-  io.busy := alu.io.req.valid || outputValid
 }
 
 object PEDriver extends App {
